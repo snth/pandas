@@ -20,7 +20,7 @@ __all__ = ['rolling_count', 'rolling_max', 'rolling_min',
            'rolling_sum', 'rolling_mean', 'rolling_std', 'rolling_cov',
            'rolling_corr', 'rolling_var', 'rolling_skew', 'rolling_kurt',
            'rolling_quantile', 'rolling_median', 'rolling_apply',
-           'rolling_corr_pairwise', 'rolling_window',
+           'rolling_cov_pairwise', 'rolling_corr_pairwise', 'rolling_window',
            'ewma', 'ewmvar', 'ewmstd', 'ewmvol', 'ewmcorr', 'ewmcov',
            'expanding_count', 'expanding_max', 'expanding_min',
            'expanding_sum', 'expanding_mean', 'expanding_std',
@@ -220,6 +220,49 @@ def _flex_binary_moment(arg1, arg2, f):
         return DataFrame(results, index=X.index, columns=res_columns)
     else:
         return _flex_binary_moment(arg2, arg1, f)
+
+
+def rolling_cov_pairwise(df, df2, window=None, min_periods=None):
+    """
+    Computes pairwise rolling covariance matrices as Panel whose items are
+    dates
+
+    Parameters
+    ----------
+    df : DataFrame
+    df2 : DataFrame, optional, default df
+    window : int
+    min_periods : int, default None
+
+    Returns
+    -------
+    covs : Panel
+    """
+    from pandas import Panel
+    from collections import defaultdict
+
+    # Try to preserve the previous API
+    if window is None and isinstance(df2, (int, float)):
+        window = df2
+        df2 = df
+    # Detect symmetry
+    if df2 is df:
+        symmetric = True
+    else:
+        symmetric = False
+
+    all_results = defaultdict(dict)
+
+    for i, k1 in enumerate(df.columns):
+        for j, k2 in enumerate(df2.columns):
+            if j<i and symmetric:
+                all_results[k1][k2] = all_results[k2][k1]
+            else:
+                cov = rolling_cov(df[k1], df2[k2], window,
+                                    min_periods=min_periods)
+                all_results[k1][k2] = cov
+
+    return Panel.from_dict(all_results).swapaxes('items', 'major')
 
 
 def rolling_corr_pairwise(df, window, min_periods=None):
