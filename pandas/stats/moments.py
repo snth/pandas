@@ -112,6 +112,8 @@ _flex_retval = """y : type depends on inputs
     DataFrame / Series -> Computes result for each column
     Series / Series -> Series"""
 
+_pairwise_retval = "y : Panel"
+
 _unary_arg = "arg : Series, DataFrame"
 
 _binary_arg_flex = """arg1 : Series, DataFrame, or ndarray
@@ -119,6 +121,9 @@ arg2 : Series, DataFrame, or ndarray"""
 
 _binary_arg = """arg1 : Series, DataFrame, or ndarray
 arg2 : Series, DataFrame, or ndarray"""
+
+_pairwise_arg = """df1 : DataFrame
+df2 : DataFrame"""
 
 _bias_doc = r"""bias : boolean, default False
     Use a standard estimation bias correction
@@ -221,61 +226,54 @@ def _flex_binary_moment(arg1, arg2, f):
         return _flex_binary_moment(arg2, arg1, f)
 
 
-_doc_pairwise = """
-Computes pairwise rolling %(mat_type)s matrices as Panel whose items are dates
-
-Parameters
-----------
-df : DataFrame
-df2 : DataFrame, optional, default df
-window : int
-min_periods : int, default None
-
-Returns
--------
-covs : Panel
-"""
-
-
-def _flex_pairwise_moment(moment_func, df, df2, window=None, min_periods=None):
+def _flex_pairwise_moment(moment_func, df1, df2, **kwargs):
     from pandas import Panel
     from collections import defaultdict
 
-    # Try to preserve the previous API
-    if window is None and isinstance(df2, (int, float)):
-        window = df2
-        df2 = df
     # Detect symmetry
-    if df2 is df:
+    if df2 is df1:
         symmetric = True
     else:
         symmetric = False
 
     all_results = defaultdict(dict)
 
-    for i, k1 in enumerate(df.columns):
+    for i, k1 in enumerate(df1.columns):
         for j, k2 in enumerate(df2.columns):
             if j<i and symmetric:
                 all_results[k1][k2] = all_results[k2][k1]
             else:
-                all_results[k1][k2] = moment_func(df[k1], df2[k2], window,
-                                                  min_periods=min_periods)
+                all_results[k1][k2] = moment_func(df1[k1], df2[k2], **kwargs)
 
     return Panel.from_dict(all_results).swapaxes('items', 'major')
 
 
-@Substitution(mat_type="covariance")
-@Appender(_doc_pairwise)
-def rolling_cov_pairwise(df, df2, window=None, min_periods=None):
-    return _flex_pairwise_moment(rolling_cov, df, df2, window=window,
-                                 min_periods=min_periods)
+@Substitution("Pairwise unbiased moving covariance", _pairwise_arg,
+              _pairwise_retval)
+@Appender(_doc_template)
+def rolling_cov_pairwise(df1, df2, window=None, min_periods=None, freq=None,
+                center=False, time_rule=None):
+    # Try to preserve the previous API
+    if window is None and isinstance(df2, (int, float)):
+        window = df2
+        df2 = df1
+    return _flex_pairwise_moment(rolling_cov, df1, df2, window=window,
+                                 min_periods=min_periods, freq=freq,
+                                 center=center, time_rule=time_rule)
 
 
-@Substitution(mat_type="correlation")
-@Appender(_doc_pairwise)
-def rolling_corr_pairwise(df, df2, window=None, min_periods=None):
-    return _flex_pairwise_moment(rolling_corr, df, df2, window=window,
-                                 min_periods=min_periods)
+@Substitution("Pairwise moving sample correlation", _pairwise_arg,
+              _pairwise_retval)
+@Appender(_doc_template)
+def rolling_corr_pairwise(df1, df2, window=None, min_periods=None, freq=None,
+                 center=False, time_rule=None):
+    # Try to preserve the previous API
+    if window is None and isinstance(df2, (int, float)):
+        window = df2
+        df2 = df1
+    return _flex_pairwise_moment(rolling_corr, df1, df2, window=window,
+                                 min_periods=min_periods, freq=freq,
+                                 center=center, time_rule=time_rule)
 
 
 def _rolling_moment(arg, window, func, minp, axis=0, freq=None,
