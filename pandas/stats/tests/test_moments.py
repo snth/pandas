@@ -723,6 +723,13 @@ class TestMoments(unittest.TestCase):
     def test_expanding_max(self):
         self._check_expanding(mom.expanding_max, np.max, preserve_nan=False)
 
+    def test_expanding_cov_pairwise(self):
+        result = mom.expanding_cov_pairwise(self.frame)
+
+        rolling_result = mom.rolling_cov_pairwise(self.frame,
+                                                   len(self.frame),
+                                                   min_periods=1)
+
     def test_expanding_corr_pairwise(self):
         result = mom.expanding_corr_pairwise(self.frame)
 
