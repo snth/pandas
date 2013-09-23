@@ -21,6 +21,7 @@ __all__ = ['rolling_count', 'rolling_max', 'rolling_min',
            'rolling_quantile', 'rolling_median', 'rolling_apply',
            'rolling_cov_pairwise', 'rolling_corr_pairwise', 'rolling_window',
            'ewma', 'ewmvar', 'ewmstd', 'ewmvol', 'ewmcorr', 'ewmcov',
+           'ewmcorr_pairwise', 'ewmcov_pairwise',
            'expanding_count', 'expanding_max', 'expanding_min',
            'expanding_sum', 'expanding_mean', 'expanding_std',
            'expanding_cov', 'expanding_corr', 'expanding_var',
@@ -84,7 +85,7 @@ So a "20-day EWMA" would have center 9.5.
 
 Returns
 -------
-y : type of input argument
+%s
 """
 
 
@@ -112,7 +113,7 @@ _flex_retval = """y : type depends on inputs
     DataFrame / Series -> Computes result for each column
     Series / Series -> Series"""
 
-_pairwise_retval = "y : Panel"
+_pairwise_retval = "y : Panel whose items are dates"
 
 _unary_arg = "arg : Series, DataFrame"
 
@@ -376,7 +377,8 @@ def _get_center_of_mass(com, span):
     return float(com)
 
 
-@Substitution("Exponentially-weighted moving average", _unary_arg, "")
+@Substitution("Exponentially-weighted moving average", _unary_arg, "",
+              _type_of_input)
 @Appender(_ewm_doc)
 def ewma(arg, com=None, span=None, min_periods=0, freq=None, time_rule=None,
          adjust=True):
@@ -399,7 +401,8 @@ def _first_valid_index(arr):
     return notnull(arr).argmax() if len(arr) else 0
 
 
-@Substitution("Exponentially-weighted moving variance", _unary_arg, _bias_doc)
+@Substitution("Exponentially-weighted moving variance", _unary_arg, _bias_doc,
+              _type_of_input)
 @Appender(_ewm_doc)
 def ewmvar(arg, com=None, span=None, min_periods=0, bias=False,
            freq=None, time_rule=None):
@@ -415,7 +418,8 @@ def ewmvar(arg, com=None, span=None, min_periods=0, bias=False,
     return result
 
 
-@Substitution("Exponentially-weighted moving std", _unary_arg, _bias_doc)
+@Substitution("Exponentially-weighted moving std", _unary_arg, _bias_doc,
+              _type_of_input)
 @Appender(_ewm_doc)
 def ewmstd(arg, com=None, span=None, min_periods=0, bias=False,
            time_rule=None):
@@ -426,7 +430,8 @@ def ewmstd(arg, com=None, span=None, min_periods=0, bias=False,
 ewmvol = ewmstd
 
 
-@Substitution("Exponentially-weighted moving covariance", _binary_arg, "")
+@Substitution("Exponentially-weighted moving covariance", _binary_arg, "",
+              _type_of_input)
 @Appender(_ewm_doc)
 def ewmcov(arg1, arg2, com=None, span=None, min_periods=0, bias=False,
            freq=None, time_rule=None):
@@ -445,7 +450,19 @@ def ewmcov(arg1, arg2, com=None, span=None, min_periods=0, bias=False,
     return result
 
 
-@Substitution("Exponentially-weighted moving " "correlation", _binary_arg, "")
+@Substitution("Pairwise exponentially-weighted moving covariance",
+              _pairwise_arg, "", _pairwise_retval)
+@Appender(_ewm_doc)
+def ewmcov_pairwise(df1, df2=None, com=None, span=None, min_periods=0,
+                    bias=False, freq=None, time_rule=None):
+    if df2 is None:
+        df2 = df1
+    return _flex_pairwise_moment(ewmcov, df1, df2, com=com, span=span,
+            min_periods=min_periods, bias=bias, freq=freq, time_rule=time_rule)
+
+
+@Substitution("Exponentially-weighted moving correlation", _binary_arg, "",
+              _type_of_input)
 @Appender(_ewm_doc)
 def ewmcorr(arg1, arg2, com=None, span=None, min_periods=0,
             freq=None, time_rule=None):
@@ -458,6 +475,17 @@ def ewmcorr(arg1, arg2, com=None, span=None, min_periods=0,
     var = lambda x: ewmvar(x, com=com, span=span, min_periods=min_periods,
                            bias=True)
     return (mean(X * Y) - mean(X) * mean(Y)) / _zsqrt(var(X) * var(Y))
+
+
+@Substitution("Pairwise exponentially-weighted moving correlation",
+              _pairwise_arg, "", _pairwise_retval)
+@Appender(_ewm_doc)
+def ewmcorr_pairwise(df1, df2=None, com=None, span=None, min_periods=0,
+                     freq=None, time_rule=None):
+    if df2 is None:
+        df2 = df1
+    return _flex_pairwise_moment(ewmcorr, df1, df2, com=com, span=span,
+            min_periods=min_periods, freq=freq, time_rule=time_rule)
 
 
 def _zsqrt(x):
