@@ -26,7 +26,8 @@ __all__ = ['rolling_count', 'rolling_max', 'rolling_min',
            'expanding_sum', 'expanding_mean', 'expanding_std',
            'expanding_cov', 'expanding_corr', 'expanding_var',
            'expanding_skew', 'expanding_kurt', 'expanding_quantile',
-           'expanding_median', 'expanding_apply', 'expanding_corr_pairwise']
+           'expanding_median', 'expanding_apply',
+           'expanding_cov_pairwise', 'expanding_corr_pairwise']
 
 #------------------------------------------------------------------------------
 # Docs
@@ -113,7 +114,7 @@ _flex_retval = """y : type depends on inputs
     DataFrame / Series -> Computes result for each column
     Series / Series -> Series"""
 
-_pairwise_retval = "y : Panel whose items are dates"
+_pairwise_retval = "y : Panel whose items are df1.index values"
 
 _unary_arg = "arg : Series, DataFrame"
 
@@ -832,6 +833,18 @@ def expanding_cov(arg1, arg2, min_periods=1, freq=None, center=False,
                        center=center, time_rule=time_rule)
 
 
+@Substitution("Pairwise unbiased expanding covariance", _pairwise_arg,
+              _pairwise_retval)
+@Appender(_expanding_doc)
+def expanding_cov_pairwise(df1, df2=None, min_periods=1, freq=None,
+                            center=False, time_rule=None):
+    if df2 is None:
+        df2 = df1
+    return _flex_pairwise_moment(expanding_cov, df1, df2,
+                                 min_periods=min_periods, freq=freq,
+                                 center=center, time_rule=time_rule)
+
+
 @Substitution("Expanding sample correlation", _binary_arg_flex, _flex_retval)
 @Appender(_expanding_doc)
 def expanding_corr(arg1, arg2, min_periods=1, freq=None, center=False,
@@ -842,24 +855,16 @@ def expanding_corr(arg1, arg2, min_periods=1, freq=None, center=False,
                         freq=freq, center=center, time_rule=time_rule)
 
 
-def expanding_corr_pairwise(df, min_periods=1):
-    """
-    Computes pairwise expanding correlation matrices as Panel whose items are
-    dates
-
-    Parameters
-    ----------
-    df : DataFrame
-    min_periods : int, default 1
-
-    Returns
-    -------
-    correls : Panel
-    """
-
-    window = len(df)
-
-    return rolling_corr_pairwise(df, window, min_periods=min_periods)
+@Substitution("Pairwise expanding sample correlation", _pairwise_arg,
+              _pairwise_retval)
+@Appender(_expanding_doc)
+def expanding_corr_pairwise(df1, df2=None, min_periods=1, freq=None,
+                            center=False, time_rule=None):
+    if df2 is None:
+        df2 = df1
+    return _flex_pairwise_moment(expanding_corr, df1, df2,
+                                 min_periods=min_periods, freq=freq,
+                                 center=center, time_rule=time_rule)
 
 
 def expanding_apply(arg, func, min_periods=1, freq=None, center=False,
