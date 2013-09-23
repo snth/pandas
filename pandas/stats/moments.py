@@ -221,22 +221,23 @@ def _flex_binary_moment(arg1, arg2, f):
         return _flex_binary_moment(arg2, arg1, f)
 
 
-def rolling_cov_pairwise(df, df2, window=None, min_periods=None):
-    """
-    Computes pairwise rolling covariance matrices as Panel whose items are
-    dates
+_doc_pairwise = """
+Computes pairwise rolling %(mat_type)s matrices as Panel whose items are dates
 
-    Parameters
-    ----------
-    df : DataFrame
-    df2 : DataFrame, optional, default df
-    window : int
-    min_periods : int, default None
+Parameters
+----------
+df : DataFrame
+df2 : DataFrame, optional, default df
+window : int
+min_periods : int, default None
 
-    Returns
-    -------
-    covs : Panel
-    """
+Returns
+-------
+covs : Panel
+"""
+
+
+def _flex_pairwise_moment(moment_func, df, df2, window=None, min_periods=None):
     from pandas import Panel
     from collections import defaultdict
 
@@ -257,41 +258,24 @@ def rolling_cov_pairwise(df, df2, window=None, min_periods=None):
             if j<i and symmetric:
                 all_results[k1][k2] = all_results[k2][k1]
             else:
-                cov = rolling_cov(df[k1], df2[k2], window,
-                                    min_periods=min_periods)
-                all_results[k1][k2] = cov
+                all_results[k1][k2] = moment_func(df[k1], df2[k2], window,
+                                                  min_periods=min_periods)
 
     return Panel.from_dict(all_results).swapaxes('items', 'major')
 
 
-def rolling_corr_pairwise(df, window, min_periods=None):
-    """
-    Computes pairwise rolling correlation matrices as Panel whose items are
-    dates
+@Substitution(mat_type="covariance")
+@Appender(_doc_pairwise)
+def rolling_cov_pairwise(df, df2, window=None, min_periods=None):
+    return _flex_pairwise_moment(rolling_cov, df, df2, window=window,
+                                 min_periods=min_periods)
 
-    Parameters
-    ----------
-    df : DataFrame
-    window : int
-    min_periods : int, default None
 
-    Returns
-    -------
-    correls : Panel
-    """
-    from pandas import Panel
-    from collections import defaultdict
-
-    all_results = defaultdict(dict)
-
-    for i, k1 in enumerate(df.columns):
-        for k2 in df.columns[i:]:
-            corr = rolling_corr(df[k1], df[k2], window,
-                                min_periods=min_periods)
-            all_results[k1][k2] = corr
-            all_results[k2][k1] = corr
-
-    return Panel.from_dict(all_results).swapaxes('items', 'major')
+@Substitution(mat_type="correlation")
+@Appender(_doc_pairwise)
+def rolling_corr_pairwise(df, df2, window=None, min_periods=None):
+    return _flex_pairwise_moment(rolling_corr, df, df2, window=window,
+                                 min_periods=min_periods)
 
 
 def _rolling_moment(arg, window, func, minp, axis=0, freq=None,
