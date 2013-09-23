@@ -578,12 +578,8 @@ class TestMoments(unittest.TestCase):
         assert_almost_equal(result[-1], np.cov(A[-50:], B[-50:])[0, 1])
 
     def test_rolling_cov_pairwise(self):
-        panel = mom.rolling_cov_pairwise(self.frame, 10, min_periods=5)
-
-        correl = panel.ix[:, 1, 5]
-        exp = mom.rolling_cov(self.frame[1], self.frame[5],
-                               10, min_periods=5)
-        tm.assert_series_equal(correl, exp)
+        self._check_pairwise_moment(mom.rolling_cov_pairwise,
+                                    mom.rolling_cov)
 
     def test_rolling_corr(self):
         A = self.series
@@ -602,12 +598,15 @@ class TestMoments(unittest.TestCase):
         assert_almost_equal(result[-1], a.corr(b))
 
     def test_rolling_corr_pairwise(self):
-        panel = mom.rolling_corr_pairwise(self.frame, 10, min_periods=5)
+        self._check_pairwise_moment(mom.rolling_corr_pairwise,
+                                    mom.rolling_corr)
 
-        correl = panel.ix[:, 1, 5]
-        exp = mom.rolling_corr(self.frame[1], self.frame[5],
-                               10, min_periods=5)
-        tm.assert_series_equal(correl, exp)
+    def _check_pairwise_moment(self, func_pairwise, func):
+        panel = func_pairwise(self.frame, 10, min_periods=5)
+
+        actual = panel.ix[:, 1, 5]
+        expected = func(self.frame[1], self.frame[5], 10, min_periods=5)
+        tm.assert_series_equal(actual, expected)
 
     def test_flex_binary_moment(self):
         # GH3155
