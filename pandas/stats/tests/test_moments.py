@@ -577,6 +577,14 @@ class TestMoments(unittest.TestCase):
         result = mom.rolling_cov(A, B, 50, min_periods=25)
         assert_almost_equal(result[-1], np.cov(A[-50:], B[-50:])[0, 1])
 
+    def test_rolling_cov_pairwise(self):
+        panel = mom.rolling_cov_pairwise(self.frame, 10, min_periods=5)
+
+        correl = panel.ix[:, 1, 5]
+        exp = mom.rolling_cov(self.frame[1], self.frame[5],
+                               10, min_periods=5)
+        tm.assert_series_equal(correl, exp)
+
     def test_rolling_corr(self):
         A = self.series
         B = A + randn(len(A))
