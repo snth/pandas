@@ -5,6 +5,7 @@ statistics implemented in Cython
 from __future__ import division
 
 from functools import wraps
+from collections import defaultdict
 
 from numpy import NaN
 import numpy as np
@@ -168,18 +169,25 @@ def rolling_count(arg, window, freq=None, center=False, time_rule=None):
 
 @Substitution("Unbiased moving covariance", _binary_arg_flex, _flex_retval)
 @Appender(_doc_template)
-def rolling_cov(arg1, arg2, window, min_periods=None, freq=None,
-                center=False, time_rule=None):
+def rolling_cov(arg1, arg2=None, window=None, min_periods=None, freq=None,
+                center=False, time_rule=None, pairwise=None):
+    if window is None and isinstance(arg2, (int, float)):
+        window = arg2
+        arg2 = arg1
+        pairwise = True if pairwise is None else pairwise  # only default unset
+    elif arg2 is None:
+        arg2 = arg1
+        pairwise = True if pairwise is None else pairwise  # only default unset
     arg1 = _conv_timerule(arg1, freq, time_rule)
     arg2 = _conv_timerule(arg2, freq, time_rule)
     window = min(window, len(arg1), len(arg2))
 
     def _get_cov(X, Y):
-        mean = lambda x: rolling_mean(x, window, min_periods,center=center)
-        count = rolling_count(X + Y, window,center=center)
+        mean = lambda x: rolling_mean(x, window, min_periods, center=center)
+        count = rolling_count(X + Y, window, center=center)
         bias_adj = count / (count - 1)
         return (mean(X * Y) - mean(X) * mean(Y)) * bias_adj
-    rs = _flex_binary_moment(arg1, arg2, _get_cov)
+    rs = _flex_binary_moment(arg1, arg2, _get_cov, pairwise=bool(pairwise))
     return rs
 
 
@@ -198,7 +206,7 @@ def rolling_corr(arg1, arg2, window, min_periods=None, freq=None,
     return _flex_binary_moment(arg1, arg2, _get_corr)
 
 
-def _flex_binary_moment(arg1, arg2, f):
+def _flex_binary_moment(arg1, arg2, f, pairwise=False):
     if not (isinstance(arg1, (np.ndarray, Series, DataFrame)) and
             isinstance(arg2, (np.ndarray, Series, DataFrame))):
         raise ValueError("arguments to moment function must be of type "
@@ -214,10 +222,23 @@ def _flex_binary_moment(arg1, arg2, f):
             X, Y = arg1.align(arg2, join='outer')
             X = X + 0 * Y
             Y = Y + 0 * X
-            res_columns = arg1.columns.union(arg2.columns)
-            for col in res_columns:
-                if col in X and col in Y:
-                    results[col] = f(X[col], Y[col])
+            if pairwise is False:
+                res_columns = arg1.columns.union(arg2.columns)
+                for col in res_columns:
+                    if col in X and col in Y:
+                        results[col] = f(X[col], Y[col])
+            elif pairwise is True:
+                results = defaultdict(dict)
+                for i, k1 in enumerate(arg1.columns):
+                    for j, k2 in enumerate(arg2.columns):
+                        if j<i and arg2 is arg1:
+                            # Symmetric case
+                            results[k1][k2] = results[k2][k1]
+                        else:
+                            results[k1][k2] = f(arg1[k1], arg2[k2])
+                return Panel.from_dict(results).swapaxes('items', 'major')
+            else:
+                raise ValueError("'pairwise' is not True/False")
         else:
             res_columns = arg1.columns
             X, Y = arg1.align(arg2, axis=0, join='outer')
@@ -232,8 +253,6 @@ def _flex_binary_moment(arg1, arg2, f):
 
 
 def _flex_pairwise_moment(moment_func, df1, df2, **kwargs):
-    from collections import defaultdict
-
     # Detect symmetry
     if df2 is df1:
         symmetric = True
