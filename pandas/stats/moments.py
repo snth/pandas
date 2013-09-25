@@ -145,7 +145,7 @@ def rolling_count(arg, window, freq=None, center=False, time_rule=None):
     center : boolean, default False
         Whether the label should correspond with center of window
     time_rule : Legacy alias for freq
-    
+
     Returns
     -------
     rolling_count : type of caller
@@ -198,11 +198,13 @@ def rolling_corr(arg1, arg2, window, min_periods=None, freq=None,
 
 
 def _flex_binary_moment(arg1, arg2, f):
-    if not (isinstance(arg1,(np.ndarray, DataFrame)) and
-            isinstance(arg1,(np.ndarray, DataFrame))):
-        raise ValueError("arguments to moment function must be of type ndarray/DataFrame")
+    if not (isinstance(arg1, (np.ndarray, Series, DataFrame)) and
+            isinstance(arg2, (np.ndarray, Series, DataFrame))):
+        raise ValueError("arguments to moment function must be of type "
+                         "ndarray/DataFrame")
 
-    if isinstance(arg1, np.ndarray) and isinstance(arg2, np.ndarray):
+    if isinstance(arg1, (np.ndarray, Series)) and \
+            isinstance(arg2, (np.ndarray,Series)):
         X, Y = _prep_binary(arg1, arg2)
         return f(X, Y)
     elif isinstance(arg1, DataFrame):
@@ -229,7 +231,6 @@ def _flex_binary_moment(arg1, arg2, f):
 
 
 def _flex_pairwise_moment(moment_func, df1, df2, **kwargs):
-    from pandas import Panel
     from collections import defaultdict
 
     # Detect symmetry
