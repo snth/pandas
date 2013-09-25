@@ -437,16 +437,15 @@ ewmvol = ewmstd
 @Appender(_ewm_doc)
 def ewmcov(arg1, arg2, com=None, span=None, min_periods=0, bias=False,
            freq=None, time_rule=None):
-    X, Y = _prep_binary(arg1, arg2)
+    arg1 = _conv_timerule(arg1, freq, time_rule)
+    arg2 = _conv_timerule(arg2, freq, time_rule)
 
-    X = _conv_timerule(X, freq, time_rule)
-    Y = _conv_timerule(Y, freq, time_rule)
-
-    mean = lambda x: ewma(x, com=com, span=span, min_periods=min_periods)
-
-    result = (mean(X * Y) - mean(X) * mean(Y))
-    com = _get_center_of_mass(com, span)
+    def _get_ewmcov(X, Y):
+        mean = lambda x: ewma(x, com=com, span=span, min_periods=min_periods)
+        return (mean(X * Y) - mean(X) * mean(Y))
+    result = _flex_binary_moment(arg1, arg2, _get_ewmcov)
     if not bias:
+        com = _get_center_of_mass(com, span)
         result *= (1.0 + 2.0 * com) / (2.0 * com)
 
     return result
@@ -468,15 +467,16 @@ def ewmcov_pairwise(df1, df2=None, com=None, span=None, min_periods=0,
 @Appender(_ewm_doc)
 def ewmcorr(arg1, arg2, com=None, span=None, min_periods=0,
             freq=None, time_rule=None):
-    X, Y = _prep_binary(arg1, arg2)
+    arg1 = _conv_timerule(arg1, freq, time_rule)
+    arg2 = _conv_timerule(arg2, freq, time_rule)
 
-    X = _conv_timerule(X, freq, time_rule)
-    Y = _conv_timerule(Y, freq, time_rule)
-
-    mean = lambda x: ewma(x, com=com, span=span, min_periods=min_periods)
-    var = lambda x: ewmvar(x, com=com, span=span, min_periods=min_periods,
-                           bias=True)
-    return (mean(X * Y) - mean(X) * mean(Y)) / _zsqrt(var(X) * var(Y))
+    def _get_ewmcorr(X, Y):
+        mean = lambda x: ewma(x, com=com, span=span, min_periods=min_periods)
+        var = lambda x: ewmvar(x, com=com, span=span, min_periods=min_periods,
+                            bias=True)
+        return (mean(X * Y) - mean(X) * mean(Y)) / _zsqrt(var(X) * var(Y))
+    result = _flex_binary_moment(arg1, arg2, _get_ewmcorr)
+    return result
 
 
 @Substitution("Pairwise exponentially-weighted moving correlation",
