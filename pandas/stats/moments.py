@@ -12,7 +12,7 @@ import numpy as np
 
 from pandas.core.api import DataFrame, Series, Panel, notnull
 import pandas.algos as algos
-import pandas.core.common as com
+import pandas.core.common as pdcom
 
 from pandas.util.decorators import Substitution, Appender
 
@@ -289,7 +289,7 @@ def _rolling_moment(arg, window, func, minp, axis=0, freq=None,
     center : boolean, default False
         Whether the label should correspond with center of window
     time_rule : Legacy alias for freq
-    
+
     Returns
     -------
     y : type of input
@@ -311,7 +311,8 @@ def _rolling_moment(arg, window, func, minp, axis=0, freq=None,
 
 def _center_window(rs, window, axis):
     if axis > rs.ndim-1:
-        raise ValueError("Requested axis is larger then no. of argument dimensions")
+        raise ValueError("Requested axis is larger then no. of argument "
+                         "dimensions")
 
     offset = int((window - 1) / 2.)
     if isinstance(rs, (Series, DataFrame, Panel)):
@@ -583,7 +584,7 @@ def rolling_quantile(arg, window, quantile, min_periods=None, freq=None,
     center : boolean, default False
         Whether the label should correspond with center of window
     time_rule : Legacy alias for freq
-    
+
     Returns
     -------
     y : type of input argument
@@ -613,7 +614,7 @@ def rolling_apply(arg, window, func, min_periods=None, freq=None,
     center : boolean, default False
         Whether the label should correspond with center of window
     time_rule : Legacy alias for freq
-    
+
     Returns
     -------
     y : type of input argument
@@ -650,7 +651,7 @@ def rolling_window(arg, window=None, win_type=None, min_periods=None,
         If True computes weighted mean, else weighted sum
     time_rule : Legacy alias for freq
     axis : {0, 1}, default 0
-    
+
     Returns
     -------
     y : type of input argument
@@ -678,8 +679,8 @@ def rolling_window(arg, window=None, win_type=None, min_periods=None,
         if win_type is not None:
             raise ValueError(('Do not specify window type if using custom '
                               'weights'))
-        window = com._asarray_tuplesafe(window).astype(float)
-    elif com.is_integer(window):  # window size
+        window = pdcom._asarray_tuplesafe(window).astype(float)
+    elif pdcom.is_integer(window):  # window size
         if win_type is None:
             raise ValueError('Must specify window type')
         try:
@@ -776,7 +777,7 @@ def expanding_count(arg, freq=None, center=False, time_rule=None):
     center : boolean, default False
         Whether the label should correspond with center of window
     time_rule : Legacy alias for freq
-    
+
     Returns
     -------
     expanding_count : type of caller
@@ -800,7 +801,7 @@ def expanding_quantile(arg, quantile, min_periods=1, freq=None,
     center : boolean, default False
         Whether the label should correspond with center of window
     time_rule : Legacy alias for freq
-    
+
     Returns
     -------
     y : type of input argument
@@ -870,7 +871,7 @@ def expanding_apply(arg, func, min_periods=1, freq=None, center=False,
     center : boolean, default False
         Whether the label should correspond with center of window
     time_rule : Legacy alias for freq
-    
+
     Returns
     -------
     y : type of input argument
