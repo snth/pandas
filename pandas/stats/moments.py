@@ -20,15 +20,13 @@ __all__ = ['rolling_count', 'rolling_max', 'rolling_min',
            'rolling_sum', 'rolling_mean', 'rolling_std', 'rolling_cov',
            'rolling_corr', 'rolling_var', 'rolling_skew', 'rolling_kurt',
            'rolling_quantile', 'rolling_median', 'rolling_apply',
-           'rolling_cov_pairwise', 'rolling_corr_pairwise', 'rolling_window',
+           'rolling_corr_pairwise', 'rolling_window',
            'ewma', 'ewmvar', 'ewmstd', 'ewmvol', 'ewmcorr', 'ewmcov',
-           'ewmcorr_pairwise', 'ewmcov_pairwise',
            'expanding_count', 'expanding_max', 'expanding_min',
            'expanding_sum', 'expanding_mean', 'expanding_std',
            'expanding_cov', 'expanding_corr', 'expanding_var',
            'expanding_skew', 'expanding_kurt', 'expanding_quantile',
-           'expanding_median', 'expanding_apply',
-           'expanding_cov_pairwise', 'expanding_corr_pairwise']
+           'expanding_median', 'expanding_apply', 'expanding_corr_pairwise']
 
 #------------------------------------------------------------------------------
 # Docs
@@ -192,8 +190,19 @@ def rolling_cov(arg1, arg2=None, window=None, min_periods=None, freq=None,
 
 @Substitution("Moving sample correlation", _binary_arg_flex, _flex_retval)
 @Appender(_doc_template)
-def rolling_corr(arg1, arg2, window, min_periods=None, freq=None,
-                 center=False, time_rule=None):
+def rolling_corr(arg1, arg2=None, window=None, min_periods=None, freq=None,
+                 center=False, time_rule=None, pairwise=None):
+    if window is None and isinstance(arg2, (int, float)):
+        window = arg2
+        arg2 = arg1
+        pairwise = True if pairwise is None else pairwise  # only default unset
+    elif arg2 is None:
+        arg2 = arg1
+        pairwise = True if pairwise is None else pairwise  # only default unset
+    arg1 = _conv_timerule(arg1, freq, time_rule)
+    arg2 = _conv_timerule(arg2, freq, time_rule)
+    window = min(window, len(arg1), len(arg2))
+
     def _get_corr(a, b):
         num = rolling_cov(a, b, window, min_periods, freq=freq,
                           center=center, time_rule=time_rule)
@@ -202,7 +211,7 @@ def rolling_corr(arg1, arg2, window, min_periods=None, freq=None,
                rolling_std(b, window, min_periods, freq=freq,
                            center=center, time_rule=time_rule))
         return num / den
-    return _flex_binary_moment(arg1, arg2, _get_corr)
+    return _flex_binary_moment(arg1, arg2, _get_corr, pairwise=bool(pairwise))
 
 
 def _flex_binary_moment(arg1, arg2, f, pairwise=False):
@@ -251,51 +260,14 @@ def _flex_binary_moment(arg1, arg2, f, pairwise=False):
         return _flex_binary_moment(arg2, arg1, f)
 
 
-def _flex_pairwise_moment(moment_func, df1, df2, **kwargs):
-    # Detect symmetry
-    if df2 is df1:
-        symmetric = True
-    else:
-        symmetric = False
-
-    all_results = defaultdict(dict)
-
-    for i, k1 in enumerate(df1.columns):
-        for j, k2 in enumerate(df2.columns):
-            if j<i and symmetric:
-                all_results[k1][k2] = all_results[k2][k1]
-            else:
-                all_results[k1][k2] = moment_func(df1[k1], df2[k2], **kwargs)
-
-    return Panel.from_dict(all_results).swapaxes('items', 'major')
-
-
-@Substitution("Pairwise unbiased moving covariance", _pairwise_arg,
-              _pairwise_retval)
-@Appender(_doc_template)
-def rolling_cov_pairwise(df1, df2, window=None, min_periods=None, freq=None,
-                center=False, time_rule=None):
-    # Try to preserve the previous API
-    if window is None and isinstance(df2, (int, float)):
-        window = df2
-        df2 = df1
-    return _flex_pairwise_moment(rolling_cov, df1, df2, window=window,
-                                 min_periods=min_periods, freq=freq,
-                                 center=center, time_rule=time_rule)
-
-
 @Substitution("Pairwise moving sample correlation", _pairwise_arg,
               _pairwise_retval)
 @Appender(_doc_template)
-def rolling_corr_pairwise(df1, df2, window=None, min_periods=None, freq=None,
-                 center=False, time_rule=None):
-    # Try to preserve the previous API
-    if window is None and isinstance(df2, (int, float)):
-        window = df2
-        df2 = df1
-    return _flex_pairwise_moment(rolling_corr, df1, df2, window=window,
-                                 min_periods=min_periods, freq=freq,
-                                 center=center, time_rule=time_rule)
+def rolling_corr_pairwise(df1, df2=None, window=None, min_periods=None,
+                          freq=None, center=False, time_rule=None):
+    return rolling_corr(df1, df2, window=window, min_periods=min_periods,
+                        freq=freq, center=center, time_rule=time_rule,
+                        pairwise=True)
 
 
 def _rolling_moment(arg, window, func, minp, axis=0, freq=None,
@@ -454,15 +426,23 @@ ewmvol = ewmstd
 @Substitution("Exponentially-weighted moving covariance", _binary_arg, "",
               _type_of_input)
 @Appender(_ewm_doc)
-def ewmcov(arg1, arg2, com=None, span=None, min_periods=0, bias=False,
-           freq=None, time_rule=None):
+def ewmcov(arg1, arg2=None, com=None, span=None, min_periods=0, bias=False,
+           freq=None, time_rule=None, pairwise=None):
+    if arg2 is None:
+        arg2 = arg1
+        pairwise = True if pairwise is None else pairwise
+    elif isinstance(arg2, (int, float)) and com is None:
+        com = arg2
+        arg2 = arg1
+        pairwise = True if pairwise is None else pairwise
     arg1 = _conv_timerule(arg1, freq, time_rule)
     arg2 = _conv_timerule(arg2, freq, time_rule)
 
     def _get_ewmcov(X, Y):
         mean = lambda x: ewma(x, com=com, span=span, min_periods=min_periods)
         return (mean(X * Y) - mean(X) * mean(Y))
-    result = _flex_binary_moment(arg1, arg2, _get_ewmcov)
+    result = _flex_binary_moment(arg1, arg2, _get_ewmcov,
+                                 pairwise=bool(pairwise))
     if not bias:
         com = _get_center_of_mass(com, span)
         result *= (1.0 + 2.0 * com) / (2.0 * com)
@@ -470,43 +450,29 @@ def ewmcov(arg1, arg2, com=None, span=None, min_periods=0, bias=False,
     return result
 
 
-@Substitution("Pairwise exponentially-weighted moving covariance",
-              _pairwise_arg, "", _pairwise_retval)
-@Appender(_ewm_doc)
-def ewmcov_pairwise(df1, df2=None, com=None, span=None, min_periods=0,
-                    bias=False, freq=None, time_rule=None):
-    if df2 is None:
-        df2 = df1
-    return _flex_pairwise_moment(ewmcov, df1, df2, com=com, span=span,
-            min_periods=min_periods, bias=bias, freq=freq, time_rule=time_rule)
-
-
 @Substitution("Exponentially-weighted moving correlation", _binary_arg, "",
               _type_of_input)
 @Appender(_ewm_doc)
-def ewmcorr(arg1, arg2, com=None, span=None, min_periods=0,
-            freq=None, time_rule=None):
+def ewmcorr(arg1, arg2=None, com=None, span=None, min_periods=0,
+            freq=None, time_rule=None, pairwise=None):
+    if arg2 is None:
+        arg2 = arg1
+        pairwise = True if pairwise is None else pairwise
+    elif isinstance(arg2, (int, float)) and com is None:
+        com = arg2
+        arg2 = arg1
+        pairwise = True if pairwise is None else pairwise
     arg1 = _conv_timerule(arg1, freq, time_rule)
     arg2 = _conv_timerule(arg2, freq, time_rule)
 
     def _get_ewmcorr(X, Y):
         mean = lambda x: ewma(x, com=com, span=span, min_periods=min_periods)
         var = lambda x: ewmvar(x, com=com, span=span, min_periods=min_periods,
-                            bias=True)
+                               bias=True)
         return (mean(X * Y) - mean(X) * mean(Y)) / _zsqrt(var(X) * var(Y))
-    result = _flex_binary_moment(arg1, arg2, _get_ewmcorr)
+    result = _flex_binary_moment(arg1, arg2, _get_ewmcorr,
+                                 pairwise=bool(pairwise))
     return result
-
-
-@Substitution("Pairwise exponentially-weighted moving correlation",
-              _pairwise_arg, "", _pairwise_retval)
-@Appender(_ewm_doc)
-def ewmcorr_pairwise(df1, df2=None, com=None, span=None, min_periods=0,
-                     freq=None, time_rule=None):
-    if df2 is None:
-        df2 = df1
-    return _flex_pairwise_moment(ewmcorr, df1, df2, com=com, span=span,
-            min_periods=min_periods, freq=freq, time_rule=time_rule)
 
 
 def _zsqrt(x):
@@ -845,34 +811,37 @@ def expanding_quantile(arg, quantile, min_periods=1, freq=None,
 
 @Substitution("Unbiased expanding covariance", _binary_arg_flex, _flex_retval)
 @Appender(_expanding_doc)
-def expanding_cov(arg1, arg2, min_periods=1, freq=None, center=False,
-                  time_rule=None):
+def expanding_cov(arg1, arg2=None, min_periods=1, freq=None, center=False,
+                  time_rule=None, pairwise=None):
+    if arg2 is None:
+        arg2 = arg1
+        pairwise = True if pairwise is None else pairwise
+    elif isinstance(arg2, (int, float)) and min_periods is None:
+        min_periods = arg2
+        arg2 = arg1
+        pairwise = True if pairwise is None else pairwise
     window = max(len(arg1), len(arg2))
     return rolling_cov(arg1, arg2, window,
                        min_periods=min_periods, freq=freq,
-                       center=center, time_rule=time_rule)
-
-
-@Substitution("Pairwise unbiased expanding covariance", _pairwise_arg,
-              _pairwise_retval)
-@Appender(_expanding_doc)
-def expanding_cov_pairwise(df1, df2=None, min_periods=1, freq=None,
-                            center=False, time_rule=None):
-    if df2 is None:
-        df2 = df1
-    return _flex_pairwise_moment(expanding_cov, df1, df2,
-                                 min_periods=min_periods, freq=freq,
-                                 center=center, time_rule=time_rule)
+                       center=center, time_rule=time_rule, pairwise=pairwise)
 
 
 @Substitution("Expanding sample correlation", _binary_arg_flex, _flex_retval)
 @Appender(_expanding_doc)
-def expanding_corr(arg1, arg2, min_periods=1, freq=None, center=False,
-                   time_rule=None):
+def expanding_corr(arg1, arg2=None, min_periods=1, freq=None, center=False,
+                   time_rule=None, pairwise=None):
+    if arg2 is None:
+        arg2 = arg1
+        pairwise = True if pairwise is None else pairwise
+    elif isinstance(arg2, (int, float)) and min_periods is None:
+        min_periods = arg2
+        arg2 = arg1
+        pairwise = True if pairwise is None else pairwise
     window = max(len(arg1), len(arg2))
     return rolling_corr(arg1, arg2, window,
                         min_periods=min_periods,
-                        freq=freq, center=center, time_rule=time_rule)
+                        freq=freq, center=center, time_rule=time_rule,
+                        pairwise=pairwise)
 
 
 @Substitution("Pairwise expanding sample correlation", _pairwise_arg,
@@ -880,11 +849,9 @@ def expanding_corr(arg1, arg2, min_periods=1, freq=None, center=False,
 @Appender(_expanding_doc)
 def expanding_corr_pairwise(df1, df2=None, min_periods=1, freq=None,
                             center=False, time_rule=None):
-    if df2 is None:
-        df2 = df1
-    return _flex_pairwise_moment(expanding_corr, df1, df2,
-                                 min_periods=min_periods, freq=freq,
-                                 center=center, time_rule=time_rule)
+    return expanding_corr(df1, df2, min_periods=min_periods,
+                          freq=freq, center=center, time_rule=time_rule,
+                          pairwise=True)
 
 
 def expanding_apply(arg, func, min_periods=1, freq=None, center=False,
